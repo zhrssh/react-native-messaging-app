@@ -3,6 +3,8 @@ import { Platform, StatusBar, StyleSheet, Text, View } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import React from "react";
 
+import FadeInView from "../animations/FadeInView";
+
 export default class Status extends React.Component {
 	constructor() {
 		super();
@@ -46,9 +48,11 @@ export default class Status extends React.Component {
 			<View style={styles.messageContainer} pointerEvents={"none"}>
 				{statusBar}
 				{!isConnected && (
-					<View style={styles.bubble}>
-						<Text style={styles.text}>No network connection.</Text>
-					</View>
+					<FadeInView style={{ width: 300 }}>
+						<View style={styles.bubble}>
+							<Text style={styles.text}>No network connection.</Text>
+						</View>
+					</FadeInView>
 				)}
 			</View>
 		);
