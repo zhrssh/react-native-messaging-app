@@ -1,4 +1,4 @@
-import { Constants } from "expo";
+import Constants from "expo-constants";
 import { Platform, StatusBar, StyleSheet, Text, View } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import React from "react";
