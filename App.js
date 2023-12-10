@@ -1,49 +1,43 @@
+import React, { Component } from "react";
 import {
-	StyleSheet,
-	Dimensions,
-	Text,
 	View,
+	StyleSheet,
 	Alert,
 	TouchableHighlight,
-	BackHandler,
 	Image,
+	BackHandler,
 } from "react-native";
-import React from "react";
-
 import MessageList from "./src/components/MessageList.js";
 import {
 	createImageMessage,
 	createLocationMessage,
 	createTextMessage,
 } from "./src/utils/MessageUtils.js";
-import Status from "./src/components/Status.js";
+import * as Location from "expo-location";
+import * as ImagePicker from "expo-image-picker";
 import Toolbar from "./src/components/Toolbar.js";
 
-class App extends React.Component {
-	constructor() {
-		super();
-
-		this.state = {
-			isInputFocused: false,
-			messages: [
-				createImageMessage("https://unsplash.it/300/300"),
-				createTextMessage("World"),
-				createTextMessage("Hello"),
-				createLocationMessage({
-					latitude: 37.78825,
-					longitude: -122.4324,
-				}),
-			],
-			fullScreenImageId: null,
-		};
-	}
+class App extends Component {
+	state = {
+		messages: [
+			createImageMessage("https://unsplash.it/300/300"),
+			createTextMessage("KeyBored Warriors"),
+			createTextMessage("Hello!"),
+			createLocationMessage({
+				latitude: 37.78825,
+				longitude: -122.4324,
+			}),
+		],
+		fullscreenImageId: null,
+		isInputFocused: true,
+	};
 
 	componentDidMount() {
 		this.subscription = BackHandler.addEventListener(
 			"hardwareBackPress",
 			() => {
-				const { fullScreenImageId } = this.state;
-				if (fullScreenImageId) {
+				const { fullscreenImageId } = this.state;
+				if (fullscreenImageId) {
 					this.dismissFullscreenImage();
 					return true;
 				}
@@ -56,74 +50,100 @@ class App extends React.Component {
 		this.subscription.remove();
 	}
 
-	// Handles image viewing
-	dismissFullscreenImage = () => {
-		this.setState({ fullScreenImageId: null });
-	};
-
-	renderFullscreenImage = () => {
-		const { messages, fullScreenImageId } = this.state;
-		const { width, height } = Dimensions.get("window");
-
-		if (!fullScreenImageId) return null;
-		const image = messages.find((message) => message.id === fullScreenImageId);
-
-		if (!image) return null;
-		const { uri } = image;
-		return (
-			<TouchableHighlight
-				style={{
-					width,
-					height,
-					position: "absolute",
-					top: 0,
-					left: 0,
-					right: 0,
-					bottom: 0,
-					backgroundColor: "black",
-				}}
-				onPress={this.dismissFullscreenImage}>
-				<Image style={styles.fullscreenImage} source={{ uri }} />
-			</TouchableHighlight>
-		);
-	};
-
-	// Handles the deletion of messages
-	handleDeleteMessage = (messageId) => {
-		const updatedMessages = this.state.messages.filter(
-			(message) => message.id !== messageId
-		);
-		this.setState({ messages: updatedMessages });
-	};
-
-	// The alert dialog
-	alert = (item) => {
-		Alert.alert("Delete", "Do you want to delete this message?", [
-			{
-				text: "Delete",
-				onPress: () => {
-					this.handleDeleteMessage(item.id);
-				},
-			},
-			{
-				text: "Cancel",
-			},
-		]);
-	};
-
-	// Handles message bubble function
-	handlePressMessage = (item) => {
-		switch (item.type) {
+	handlePressMessage = ({ id, type, text }) => {
+		switch (type) {
 			case "text":
-				this.alert(item);
+				Alert.alert(
+					"Delete message?",
+					`Are you sure you want to permanently delete this message: ${text}?`,
+					[
+						{
+							text: "Cancel",
+							style: "cancel",
+						},
+						{
+							text: "Delete",
+							style: "destructive",
+							onPress: () => {
+								const { messages } = this.state;
+								this.setState({
+									messages: messages.filter((message) => message.id !== id),
+								});
+							},
+						},
+					]
+				);
 				break;
 			case "image":
-				this.setState({ isInputFocused: false });
-				this.setState({ fullScreenImageId: item.id });
+				this.setState({ fullscreenImageId: id });
 				break;
 			default:
 				break;
 		}
+	};
+
+	dismissFullscreenImage = () => {
+		this.setState({ fullscreenImageId: null });
+	};
+
+	handleChangeFocus = (isFocused) => {
+		this.setState({ isInputFocused: isFocused });
+	};
+
+	handleSubmit = (text) => {
+		const { messages } = this.state;
+		this.setState({
+			messages: [createTextMessage(text), ...messages],
+		});
+	};
+
+	handlePressToolbarCamera = async () => {
+		const options = {
+			mediaTypes: ImagePicker.MediaTypeOptions.All,
+			allowsEditing: true,
+			aspect: [4, 3],
+			quality: 1,
+		};
+
+		const result = await ImagePicker.launchImageLibraryAsync(options);
+
+		if (!result.canceled) {
+			// Check if "assets" array is present and not empty
+			if (result.assets && result.assets.length > 0) {
+				const selectedAsset = result.assets[0];
+				this.handleSubmitImage(selectedAsset.uri);
+			} else {
+				console.warn("No assets selected");
+			}
+		}
+	};
+
+	handleSubmitImage = (imageUri) => {
+		const { messages } = this.state;
+		this.setState({
+			messages: [createImageMessage(imageUri), ...messages],
+		});
+	};
+
+	handlePressToolbarLocation = async () => {
+		try {
+			let { status } = await Location.requestForegroundPermissionsAsync();
+			if (status === "granted") {
+				let location = await Location.getCurrentPositionAsync({});
+				this.handleSubmitLocation(location); // Handle the location here
+			} else {
+				console.log("Location permission denied");
+			}
+		} catch (error) {
+			console.error("Error getting location:", error);
+		}
+	};
+
+	handleSubmitLocation = (location) => {
+		const { messages } = this.state;
+		this.setState({
+			messages: [createLocationMessage(location.coords), ...messages],
+		});
 	};
 
 	renderMessageList() {
@@ -139,44 +159,45 @@ class App extends React.Component {
 		);
 	}
 
-	handlePressToolbarCamera = () => {};
+	renderFullscreenImage = () => {
+		const { messages, fullscreenImageId } = this.state;
 
-	handlePressToolbarLocation = () => {};
+		if (!fullscreenImageId) return null;
 
-	handleChangeFocus = (isFocused) => {
-		this.setState({ isInputFocused: isFocused });
-	};
+		const image = messages.find((message) => message.id === fullscreenImageId);
 
-	handleSubmit = (text) => {
-		const { messages } = this.state;
-		this.setState({
-			messages: [createTextMessage(text), ...messages],
-		});
-	};
+		if (!image) return null;
 
-	renderToolbar() {
-		const { isInputFocused } = this.state;
+		const { uri } = image;
+
 		return (
-			<Toolbar
-				isFocused={isInputFocused}
-				onSubmit={this.handleSubmit}
-				onChangeFocus={this.handleChangeFocus}
-				onPressCamera={this.handlePressToolbarCamera}
-				onPressLocation={this.handlePressToolbarLocation}
-			/>
+			<View style={styles.fullscreenOverlay}>
+				<TouchableHighlight
+					style={styles.fullscreenImageContainer}
+					onPress={this.dismissFullscreenImage}>
+					<Image
+						style={styles.fullscreenImage}
+						source={{ uri: uri }}
+						resizeMode="contain"
+					/>
+				</TouchableHighlight>
+			</View>
 		);
-	}
+	};
 
 	render() {
 		return (
 			<View style={styles.container}>
-				<Status />
 				{this.renderMessageList()}
-				{this.renderToolbar()}
-				<View style={styles.inputMethodEditor}>
-					<Text>IME</Text>
-				</View>
 				{this.renderFullscreenImage()}
+				{/* Add the Toolbar component */}
+				<Toolbar
+					isFocused={this.state.isInputFocused}
+					onSubmit={this.handleSubmit}
+					onChangeFocus={this.handleChangeFocus}
+					onPressCamera={this.handlePressToolbarCamera}
+					onPressLocation={this.handlePressToolbarLocation}
+				/>
 			</View>
 		);
 	}
@@ -185,26 +206,29 @@ class App extends React.Component {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: "#fff",
-		alignItems: "center",
-		justifyContent: "center",
+	},
+	backgroundImage: {
+		flex: 1,
+		resizeMode: "stretch",
 	},
 	content: {
 		flex: 1,
-		backgroundColor: "#ffffff",
+		backgroundColor: "transparent",
 	},
-	toolbar: {
-		borderTopWidth: 1,
-		borderTopColor: "rgba(0,0,0,0.04)",
-		backgroundColor: "#ffffff",
+	fullscreenOverlay: {
+		...StyleSheet.absoluteFillObject,
+		backgroundColor: "transparent",
+		zIndex: 2,
 	},
-	inputMethodEditor: {
+	fullscreenImageContainer: {
 		flex: 1,
-		backgroundColor: "#ffffff",
+		justifyContent: "center",
+		alignItems: "center",
 	},
 	fullscreenImage: {
-		resizeMode: "cover",
 		flex: 1,
+		width: "100%",
+		height: "100%",
 	},
 });
 
